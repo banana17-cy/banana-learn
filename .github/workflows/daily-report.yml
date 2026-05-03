@@ -1,0 +1,37 @@
+name: Daily US Stock Report
+
+on:
+  schedule:
+    - cron: '30 21 * * 1-5'  # 美東 5:30PM 收盤後（UTC 21:30，周一到周五）
+  workflow_dispatch:          # 允许手动触发
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pytz
+
+      - name: Generate report
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python scripts/generate_report.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          git diff --cached --quiet || git commit -m "📈 Daily US stock report - $(date -u '+%Y-%m-%d')"
+          git push
