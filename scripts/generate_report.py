@@ -155,11 +155,11 @@ def get_news_summary():
 
 
 def build_market_context(market_data, sector_data):
-    lines = ["市場指數:"]
+    lines = ["市场指数:"]
     for name, d in market_data.items():
         arrow = "▲" if d["change_pct"] >= 0 else "▼"
         lines.append(f"  {name}: {d['price']:.2f} ({arrow}{abs(d['change_pct']):.2f}%)")
-    lines.append("\n板塊 ETF / 個股:")
+    lines.append("\n板块 ETF / 个股:")
     for name, d in sector_data.items():
         arrow = "▲" if d["change_pct"] >= 0 else "▼"
         lines.append(f"  {name}: {d['price']:.2f} ({arrow}{abs(d['change_pct']):.2f}%)")
@@ -175,48 +175,52 @@ def generate_report():
     market_ctx = build_market_context(market_data, sector_data)
 
     # --- Analysis prompts ---
+    has_data = len(market_data) > 0
+
     sector_analysis = ask_claude(f"""
-今天是 {DATE_DISPLAY}，以下是美股市場數據：
+今天是 {DATE_DISPLAY}，以下是美股市场实时数据：
 {market_ctx}
 
-請分析：
-1. 今日市場整體走勢（多空判斷）
-2. 表現最強的3個板塊及利多原因
-3. 表現最弱的3個板塊及利空原因
-4. 風險指標（VIX、10Y殖利率）解讀
+{"注意：以上是真实市场数据，请基于数据进行分析。" if has_data else "注意：今日市场数据暂时无法获取，请根据近期市场趋势给出分析参考。"}
 
-用繁體中文，條列式，簡潔清楚。每點不超過2句話。
+请用简体中文分析以下内容（条列式，每点1-2句话）：
+1. 今日大盘整体走势判断（多/空/震荡），给出核心理由
+2. 今日表现最强的3个板块，说明利好原因
+3. 今日表现最弱的3个板块，说明利空原因
+4. VIX恐慌指数和10年期美债收益率的市场信号解读
 """)
 
-    news_section = ("最新財經新聞：\n" + news_text[:1000]) if news_text else ""
+    news_section = ("最新财经新闻：\n" + news_text[:1000]) if news_text else ""
     ai_analysis = ask_claude(f"""
-今天是 {DATE_DISPLAY}，AI/科技板塊數據：
+今天是 {DATE_DISPLAY}，AI/科技板块数据：
 {market_ctx}
 
 {news_section}
 
-請分析：
-1. AI板塊今日表現（NVDA、MSFT、META、GOOGL、SOXX）
-2. 影響AI股的主要消息或催化劑
-3. 短期AI板塊展望（利多/利空）
+{"注意：以上是真实市场数据。" if has_data else "注意：今日数据暂时无法获取，请根据近期AI板块趋势给出参考分析。"}
 
-用繁體中文，條列式，重點突出。
+请用简体中文分析以下内容（条列式）：
+1. 今日AI板块整体表现（NVDA、MSFT、META、GOOGL、SOXX），哪些涨哪些跌
+2. 今日影响AI股的主要消息或催化剂（产品发布、财报、政策、竞争动态等）
+3. AI板块短期展望：利多因素 vs 利空因素
+4. 重点关注个股提示
 """)
 
-    news_section2 = ("相關新聞：\n" + news_text[:800]) if news_text else ""
+    news_section2 = ("相关新闻：\n" + news_text[:800]) if news_text else ""
     macro_analysis = ask_claude(f"""
-今天是 {DATE_DISPLAY}，宏觀數據：
+今天是 {DATE_DISPLAY}，宏观金融数据：
 {market_ctx}
 
 {news_section2}
 
-請分析：
-1. 今日關鍵金融數據解讀（10Y殖利率、VIX、美元指數）
-2. 聯準會政策走向及利率預期
-3. 今日是否有重要人士發言影響市場（Fed官員/財長等），利多還是利空？
-4. 黃金、石油走勢及含義
+{"注意：以上是真实市场数据。" if has_data else "注意：今日数据暂时无法获取，请根据近期宏观趋势给出参考分析。"}
 
-用繁體中文，條列式，每點不超過2句話。
+请用简体中文分析以下内容（条列式，每点1-2句话）：
+1. 今日10年期美债收益率走势及对股市影响（利多/利空）
+2. 美联储政策动向：当前利率预期，近期官员表态
+3. 今日是否有重要人物发表影响市场的言论（Fed主席/财长/知名投资人等），利多还是利空？具体说明
+4. 美元指数、黄金、原油走势及含义
+5. 今日整体宏观环境对股市的综合评分（偏多/中性/偏空）
 """)
 
     return {
@@ -282,12 +286,14 @@ def render_html(report):
         html = re.sub(r'(<li>.*</li>\n?)+', lambda m: f'<ul>{m.group()}</ul>', html)
         return html
 
+    no_data_banner = "" if report["market_data"] else '<div class="no-data-banner">⚠️ 今日市场数据获取中，以下分析基于近期趋势参考，数据将在交易日收盘后自动更新</div>'
+
     html = f"""<!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>美股日報 {report['date']}</title>
+<title>美股日报 {report['date']}</title>
 <style>
   :root {{
     --bg: #0d1117;
@@ -326,45 +332,47 @@ def render_html(report):
   .analysis li {{ margin-bottom: 6px; }}
   .analysis strong {{ color: var(--gold); }}
   .footer {{ text-align: center; padding: 24px; color: var(--muted); font-size: 0.8rem; }}
-  .update-time {{ color: var(--muted); font-size: 0.75rem; margin-top: 4px; }}
+  .no-data-banner {{ grid-column: 1/-1; background: rgba(210,153,34,0.12); border: 1px solid var(--gold); border-radius: 8px; padding: 12px 16px; color: var(--gold); font-size: 0.85rem; text-align: center; }}
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>📈 美股每日資訊站</h1>
-  <div class="date">更新日期：{report['date']} · 美東時間</div>
+  <h1>📈 美股每日资讯站</h1>
+  <div class="date">更新日期：{report['date']} · 美东时间</div>
 </div>
 <div class="container">
 
+  {no_data_banner}
+
   <div class="card">
-    <h2>📊 大盤指數</h2>
-    {market_rows}
+    <h2>📊 大盘指数</h2>
+    {market_rows if market_rows else '<p style="color:var(--muted);font-size:0.85rem">数据加载中，请稍后刷新</p>'}
   </div>
 
   <div class="card">
-    <h2>🔥 板塊 & AI個股</h2>
-    {sector_rows}
+    <h2>🔥 板块 & AI 个股</h2>
+    {sector_rows if sector_rows else '<p style="color:var(--muted);font-size:0.85rem">数据加载中，请稍后刷新</p>'}
   </div>
 
   <div class="card full">
-    <h2>📉 板塊波動分析 · 利多 / 利空</h2>
+    <h2>📉 板块波动分析 · 利多 / 利空</h2>
     <div class="analysis">{md_to_html(report['sector_analysis'])}</div>
   </div>
 
   <div class="card full">
-    <h2>🤖 AI 板塊深度分析</h2>
+    <h2>🤖 AI 板块深度分析</h2>
     <div class="analysis">{md_to_html(report['ai_analysis'])}</div>
   </div>
 
   <div class="card full">
-    <h2>🏦 總體經濟 · 金融數據 · 重要言論</h2>
+    <h2>🏦 宏观经济 · 金融数据 · 重要言论</h2>
     <div class="analysis">{md_to_html(report['macro_analysis'])}</div>
   </div>
 
 </div>
 <div class="footer">
-  資料來源：Yahoo Finance · 分析：Claude AI<br>
-  每日美東時間開盤後自動更新 · 僅供參考，不構成投資建議
+  数据来源：Yahoo Finance · 分析：Claude AI<br>
+  每日美东时间收盘后自动更新 · 仅供参考，不构成投资建议
 </div>
 </body>
 </html>"""
